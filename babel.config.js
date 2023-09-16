@@ -1,8 +1,9 @@
 const presetEnv = require('@babel/preset-env')
 const presetReact = require('@babel/preset-react')
 const presetTS = require("@babel/preset-typescript")
+import {} from '@babel/types';
 
-module.exports = function (api) {
+export function (api) {
     api.cache(true);
   
     const presets = [ presetEnv, presetReact, presetTS];
