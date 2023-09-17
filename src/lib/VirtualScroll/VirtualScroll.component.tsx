@@ -36,13 +36,14 @@ export const VirtualScroll = () => {
                   data-index={index}
                   ref={measureElement}
                   style={{
+                    padding: '10px',
                     position: 'absolute',
                     top:0,
                     transform: `translateY(${offsetTop}px)`
                   }} 
                   
                 >
-                  {item.text}
+                  {index} - {item.text}
                 </div>
               )
             })

@@ -20,6 +20,13 @@ interface UseFixedSizeListProps {
     getItemKey:  (index: number)  => Key;
 }
 
+interface virtualItemElement {
+  offsetTop: number,
+  index: number,
+  key: Key,
+  height: number
+}
+
 const DEFAULT_OVERSCAN = 3;
 const DEFAULT_SCROLLING_DELAY = 150;
 
@@ -145,7 +152,8 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
       let totalHeight = 0;
       let startIndex = -1;
       let endIndex = -1;
-      const allRows = new Array(itemsCount);
+
+      const allRows: virtualItemElement[] = new Array(itemsCount);
       for (let index = 0; index < allRows.length; index++) {
 
         const key = getItemKey(index);
@@ -185,32 +193,60 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
       measurementCache
     ]);
 
-    const latestDate = useLatest({measurementCache, getItemKey})
+    const latestData = useLatest({measurementCache, getItemKey, allItems, scrollTop })
 
-    const measureElement = useCallback((element: Element | null) => {
+    const measureElementInner = useCallback((element: Element, resizeObserver: ResizeObserver, entry?: ResizeObserverEntry) => {
+      
+      if (!element) return;
 
-      if (!element) {
+      if (!element.isConnected) {
+        resizeObserver.unobserve(element);
         return;
-      }
+      }    
 
       const indexAttribute = element.getAttribute('data-index') || '';
       const index = +indexAttribute;
+
       if (Number.isNaN(index)) {
         console.error('dynamic elements must have a valid `data-index` attribute');
       }
 
-      const {getItemKey, measurementCache} = latestDate.current;
+      const {getItemKey, measurementCache, allItems, scrollTop} = latestData.current;
 
+      const isResize = !!entry;
       const key = getItemKey(index);
-      
-      if (typeof measurementCache[key] === 'number') {
-        return measurementCache[key];
+
+      if (!isResize && typeof measurementCache[key] === 'number') {
+        return;
+      } 
+
+      const height = entry?.borderBoxSize[0]?.blockSize ?? element.getBoundingClientRect().height;
+
+      if (measurementCache[key] === height) {
+        return;
       }
 
-      const size = element.getBoundingClientRect();
-
-      setMeasurementCache(cache => ({...cache, [key]: size.height}))
-    }, [latestDate])
+      const item = allItems[index];
+      const delta = height - item.height; 
+      if (delta !== 0 && scrollTop > item.offsetTop) {
+        const element = getScrollElement();
+        if (element) {
+          element.scrollBy(0, delta);
+        }
+      }
+      setMeasurementCache(cache => ({...cache, [key]: height}))
+    }, [])
+    
+    const itemsResizeObserver = useMemo(() => {
+      const observer = new ResizeObserver((entries) => {
+        entries.forEach((entry) => measureElementInner(entry.target, observer, entry))
+      })
+      return observer;
+    },[latestData])
+    
+    const measureElement = useCallback((element: Element | null) => {
+      measureElementInner(element, itemsResizeObserver)
+    }, [itemsResizeObserver])
 
     return {
       isScrolling,
