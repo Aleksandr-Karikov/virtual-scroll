@@ -8,19 +8,19 @@ const items = new Array(10000).fill(null).map((item, index) => (
     id: Math.random().toString(36).slice(2)
    }
 ))
-const itemHeight = 40;
+const test = (index) => {
+  return 40 + Math.round(10 * Math.random())
+}
 
 export const VirtualScroll = () => {
   const [listItems, setListItems] = useState(items);
   const scrollElementRef = useRef<HTMLDivElement>(null);
 
-  const {virtualItems, isScrolling} = useFixedSizeList({
-    itemsHeight: itemHeight, 
+  const {virtualItems, isScrolling, totalHeight} = useFixedSizeList({
+    itemsHeight: test, 
     getScrollElement: () => scrollElementRef.current,
     itemsCount: listItems.length
   })
-
-  const totalHeight = itemHeight * listItems.length;
 
   return (
     <>
@@ -28,19 +28,19 @@ export const VirtualScroll = () => {
         <div ref={scrollElementRef} className={cls.wrap}>
           <div className={cls.content} style={{height: `${totalHeight}px`}}>
           {
-            virtualItems.map(({index, offsetTop}) => {
+            virtualItems.map(({index, offsetTop, height}) => {
               const item = listItems[index];
               return (
                 <div 
                   style={{
-                    height: `${itemHeight}px`,
+                    height: `${height}px`,
                     position: 'absolute',
                     top:0,
                     transform: `translateY(${offsetTop}px)`
                   }} 
                   key={item.id}
                 >
-                  {isScrolling ? 'scrolling' : item.id}
+                  {isScrolling ? 'scrolling' : index}
                 </div>
               )
             })

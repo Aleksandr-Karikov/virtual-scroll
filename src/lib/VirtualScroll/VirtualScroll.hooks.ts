@@ -2,7 +2,7 @@ import { useState, useLayoutEffect, useEffect, useMemo } from "react";
 
 interface UseFixedSizeListProps {
     itemsCount: number;
-    itemsHeight: number;
+    itemsHeight: (index: number) => number;
     overscan?: number;
     scrollingDelay?: number;
     getScrollElement: () => HTMLElement | null;
@@ -87,30 +87,56 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
       }
     },[getScrollElement])
 
-    const {virtualItems, startIndex, endIndex} = useMemo(() => {
+    const {
+      virtualItems,
+      startIndex,
+      endIndex,
+      totalHeight,
+      allItems
+    } = useMemo(() => {
 
       const rangeStart = scrollTop;
-      const rangeEnd = scrollTop + listHeight;
-  
-      let startIndex = Math.floor(rangeStart / itemsHeight);
-      let endIndex = Math.ceil(rangeEnd / itemsHeight);
-  
-      startIndex = Math.max(0, startIndex - overscan);
-      endIndex = Math.min(itemsCount - 1, endIndex + overscan);
-      
-      const virtualItems = [];
-  
-  
-      for (let index = startIndex; index <= endIndex; index++) {
-        virtualItems.push({
-          index,
-          offsetTop: index * itemsHeight
-        })
+      let rangeEnd = scrollTop + listHeight;
+
+      let totalHeight = 0;
+      let startIndex = -1;
+      let endIndex = -1;
+      const allRows = new Array(itemsCount);
+      for (let index = 0; index < allRows.length; index++) {
+        const row = {
+          index: index,
+          height: itemsHeight(index),
+          offsetTop: totalHeight
+        };
+        totalHeight+=row.height;
+        allRows[index] = row;
+
+        if (startIndex === -1 && row.offsetTop + row.height > rangeStart)  {
+          startIndex = Math.max(0, index - overscan);
+        }
+        
+        if (index === allRows.length - 1) {
+          rangeEnd = totalHeight;
+        }
+
+        if (endIndex === -1 && row.offsetTop + row.height >= rangeEnd)  {
+          endIndex = Math.min(itemsCount - 1, index + overscan);
+        }
       }
+      
+      
+      
+      const virtualItems = allRows.slice(startIndex, endIndex + 1)
+      return {virtualItems, startIndex, endIndex, allItems: allRows, totalHeight};
   
-      return {virtualItems, startIndex, endIndex};
-  
-    },[scrollTop, itemsCount, listHeight]);
-    
-    return {isScrolling, virtualItems, startIndex, endIndex }
+    },[scrollTop, itemsCount, listHeight, itemsHeight, overscan]);
+
+    return {
+      isScrolling,
+      virtualItems,
+      startIndex,
+      endIndex,
+      allItems,
+      totalHeight
+    }
 }
