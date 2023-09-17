@@ -3,7 +3,6 @@ import { useState, useLayoutEffect, useEffect, useMemo } from "react";
 interface UseFixedSizeListProps {
     itemsCount: number;
     itemsHeight: number;
-    listHeight: number;
     overscan?: number;
     scrollingDelay?: number;
     getScrollElement: () => HTMLElement | null;
@@ -16,11 +15,11 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
     const {
         itemsCount,
         itemsHeight,
-        listHeight,
         overscan = DEFAULT_OVERSCAN,
         scrollingDelay = DEFAULT_SCROLLING_DELAY,
         getScrollElement
     } = props;
+    const [listHeight, setListHeight] = useState(0);
     const [scrollTop, setScrollTop] = useState(0);
     const [isScrolling, setIsScrolling] = useState(false);
 
@@ -49,13 +48,13 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
         return;
       }
       let timeoutId: number|null = null;
+
       const handleScroll = () => {
         setIsScrolling(true);
-  
+      let timeoutId: number|null = null;
         if (typeof timeoutId === 'number') {
           clearTimeout(timeoutId);
         }
-  
         timeoutId = window.setTimeout(() => {
           setIsScrolling(false);
         }, scrollingDelay);
@@ -64,6 +63,27 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
       return () => {
         clearTimeout(timeoutId);
         scrollElement.removeEventListener('scroll', handleScroll);
+      }
+    },[getScrollElement])
+
+    useLayoutEffect(() => {
+      const scrollElement = getScrollElement();
+      if (!scrollElement) {
+        return;
+      }
+      const resizeObserver = new ResizeObserver(([entry]) => {
+        if (!entry) {
+          return;
+        }
+        const height = 
+        entry.borderBoxSize[0].blockSize 
+        ?? entry.target.getBoundingClientRect().height
+
+        setListHeight(height);
+      });
+      resizeObserver.observe(scrollElement);
+      return () => {
+        resizeObserver.disconnect();
       }
     },[getScrollElement])
 
@@ -90,7 +110,7 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
   
       return {virtualItems, startIndex, endIndex};
   
-    },[scrollTop, itemsCount]);
+    },[scrollTop, itemsCount, listHeight]);
     
     return {isScrolling, virtualItems, startIndex, endIndex }
 }

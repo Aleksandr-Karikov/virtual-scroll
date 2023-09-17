@@ -9,7 +9,6 @@ const items = new Array(10000).fill(null).map((item, index) => (
    }
 ))
 const itemHeight = 40;
-const containerHeight = 500;
 
 export const VirtualScroll = () => {
   const [listItems, setListItems] = useState(items);
@@ -17,7 +16,6 @@ export const VirtualScroll = () => {
 
   const {virtualItems, isScrolling} = useFixedSizeList({
     itemsHeight: itemHeight, 
-    listHeight: containerHeight,
     getScrollElement: () => scrollElementRef.current,
     itemsCount: listItems.length
   })
@@ -26,8 +24,8 @@ export const VirtualScroll = () => {
 
   return (
     <>
-        {/* <button onClick={handleRevert}>reverse</button> */}
-        <div ref={scrollElementRef} className={cls.wrap}  style={{height: `${containerHeight}px`  }}>
+        <button onClick={() => setListItems(items => items.slice().reverse())}>reverse</button>
+        <div ref={scrollElementRef} className={cls.wrap}>
           <div className={cls.content} style={{height: `${totalHeight}px`}}>
           {
             virtualItems.map(({index, offsetTop}) => {
