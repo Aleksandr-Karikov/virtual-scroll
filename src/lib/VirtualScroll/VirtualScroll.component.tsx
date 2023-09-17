@@ -1,25 +1,25 @@
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import cls from './VirtualScroll.module.css'
 import { useFixedSizeList } from './VirtualScroll.hooks';
-
-const items = new Array(10000).fill(null).map((item, index) => (
-  {
-    text: " ipsum dolor sit amet consectetur adipisicing elit. Rem possimus repellat iusto corporis architecto veritatis facilis ab iure accusantium temporibus?",
-    id: Math.random().toString(36).slice(2)
-   }
-))
-const test = (index) => {
-  return 40 + Math.round(10 * Math.random())
-}
-
+import {faker} from '@faker-js/faker';
+const items = Array.from({length: 10_000}, (_, index) => ({
+  id: Math.random().toString(36).slice(2),
+  text: faker.lorem.text()
+}))
 export const VirtualScroll = () => {
   const [listItems, setListItems] = useState(items);
   const scrollElementRef = useRef<HTMLDivElement>(null);
 
-  const {virtualItems, isScrolling, totalHeight} = useFixedSizeList({
-    itemsHeight: test, 
-    getScrollElement: () => scrollElementRef.current,
-    itemsCount: listItems.length
+  const {
+    virtualItems, 
+    isScrolling,
+    totalHeight,
+    measureElement
+    } = useFixedSizeList({
+    getScrollElement: useCallback(() => scrollElementRef.current, []),
+    itemsCount: listItems.length,
+    estimateItemHeight: useCallback(() => 40, []),
+    getItemKey: useCallback((index) => listItems[index]!.id, [listItems])
   })
 
   return (
@@ -32,15 +32,17 @@ export const VirtualScroll = () => {
               const item = listItems[index];
               return (
                 <div 
+                  key={item.id}
+                  data-index={index}
+                  ref={measureElement}
                   style={{
-                    height: `${height}px`,
                     position: 'absolute',
                     top:0,
                     transform: `translateY(${offsetTop}px)`
                   }} 
-                  key={item.id}
+                  
                 >
-                  {isScrolling ? 'scrolling' : index}
+                  {item.text}
                 </div>
               )
             })
