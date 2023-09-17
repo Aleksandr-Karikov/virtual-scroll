@@ -1,0 +1,5 @@
+.wrap {
+    overflow: auto;
+    position: relative;
+    border: 1px solid lightgray;
+}
