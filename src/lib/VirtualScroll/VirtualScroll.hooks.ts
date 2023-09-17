@@ -10,56 +10,76 @@ function useLatest<T>(value: T) {
   return valueRef;
 }
 
-interface UseFixedSizeListProps {
-    itemsCount: number;
-    overscan?: number;
+interface UseFixedSizeGridProps {
+    rowsCount: number;
+    columnsCount: number;
+    overscanY?: number;
+    overscanX?: number;
     scrollingDelay?: number;
     getScrollElement: () => HTMLElement | null;
-    itemsHeight?: (index: number) => number;
-    estimateItemHeight?: (index: number) => number;
-    getItemKey:  (index: number)  => Key;
+    columnWidth: (index: number) => number;
+    rowHeight?: (index: number) => number;
+    estimateRowHeight?: (index: number) => number;
+    getRowKey:  (index: number)  => Key;
+    getColumnKey:  (index: number)  => Key;
 }
 
-interface virtualItemElement {
+interface DynamicSizeGridRow {
   offsetTop: number,
   index: number,
   key: Key,
   height: number
 }
 
-const DEFAULT_OVERSCAN = 3;
+interface DynamicSizeGridColumn {
+  offsetLeft: number,
+  index: number,
+  key: Key,
+  width: number
+}
+
+const DEFAULT_OVERSCAN_Y = 3;
+const DEFAULT_OVERSCAN_X = 1;
 const DEFAULT_SCROLLING_DELAY = 150;
 
-function validateProps(props: UseFixedSizeListProps) {
+function validateProps(props: UseFixedSizeGridProps) {
   const {
-    estimateItemHeight,
-    itemsHeight
+    estimateRowHeight,
+    rowHeight: rowsHeight
   } = props;
-  if (!itemsHeight && !estimateItemHeight) {
+  if (!rowsHeight && !estimateRowHeight) {
     throw new Error(
-      'You must pass either "estimateItemHeight" or "itemsHeight" props'
+      'You must pass either "estimateRowHeight" or "rowsHeight" props'
     )
   }
 }
 
-export function useFixedSizeList(props: UseFixedSizeListProps) {
+export function useDinamicSizeGrid(props: UseFixedSizeGridProps) {
 
   validateProps(props);
 
     const {
-        itemsCount,
-        itemsHeight,
-        overscan = DEFAULT_OVERSCAN,
+        overscanY = DEFAULT_OVERSCAN_Y,
+        overscanX = DEFAULT_OVERSCAN_X,
         scrollingDelay = DEFAULT_SCROLLING_DELAY,
+        rowsCount,
+        rowHeight,
+        columnWidth,
         getScrollElement,
-        estimateItemHeight,
-        getItemKey
+        estimateRowHeight,
+        getRowKey,
+        columnsCount,
+        getColumnKey,
     } = props;
     const [measurementCache, setMeasurementCache] = useState<Record<Key, number>>(
       {}
     );
-    const [listHeight, setListHeight] = useState(0);
+    const [gridHeight, setGridHeight] = useState(0);
     const [scrollTop, setScrollTop] = useState(0);
+
+    const [gridWidth, setGridWidth] = useState(0);
+    const [scrollLeft, setScrollLeft] = useState(0);
+
     const [isScrolling, setIsScrolling] = useState(false);
 
     useLayoutEffect(() => {
@@ -69,9 +89,10 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
           return;
         }
         const handleScroll = () => {
-          
-          const scrollTop = scrollElement.scrollTop;
+          const {scrollTop, scrollLeft} = scrollElement;
+
           setScrollTop(scrollTop);
+          setScrollLeft(scrollLeft);
         }
         
         scrollElement.addEventListener('scroll', handleScroll);
@@ -114,10 +135,15 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
         if (!entry) {
           return;
         }
-        const height = entry.borderBoxSize[0].blockSize 
-                        ?? entry.target.getBoundingClientRect().height
+        const {height, width} = entry.borderBoxSize[0] ?
+          {
+            height: entry.borderBoxSize[0].blockSize,
+            width: entry.borderBoxSize[0].inlineSize
+          } 
+          : entry.target.getBoundingClientRect()
 
-        setListHeight(height);
+        setGridHeight(height);
+        setGridWidth(width);
       });
       resizeObserver.observe(scrollElement);
       return () => {
@@ -126,74 +152,125 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
     },[getScrollElement])
 
     const {
-      virtualItems,
-      startIndex,
-      endIndex,
-      totalHeight,
-      allItems
+      virtualRows,
+      allRows,
+      endIndexRows,
+      startIndexRows,
+      totalHeight
     } = useMemo(() => {
 
-      const getItemHeight = (index: number) => {
-        if (itemsHeight) {
-          return itemsHeight(index);
+      const getRowHeight = (index: number) => {
+        if (rowHeight) {
+          return rowHeight(index);
         }
-        const key = getItemKey(index);
+        const key = getRowKey(index);
         if (typeof measurementCache[key] === 'number') {
           return measurementCache[key];
         }
 
-        return estimateItemHeight(index);
+        return estimateRowHeight(index);
 
       }
 
       const rangeStart = scrollTop;
-      let rangeEnd = scrollTop + listHeight;
+      let rangeEnd = scrollTop + gridHeight;
 
       let totalHeight = 0;
-      let startIndex = -1;
-      let endIndex = -1;
+      let startIndexRows = -1;
+      let endIndexRows = -1;
 
-      const allRows: virtualItemElement[] = new Array(itemsCount);
+      const allRows: DynamicSizeGridRow[] = new Array(rowsCount);
       for (let index = 0; index < allRows.length; index++) {
 
-        const key = getItemKey(index);
+        const key = getRowKey(index);
 
         const row = {
           key,
           index: index,
-          height: getItemHeight(index),
+          height: getRowHeight(index),
           offsetTop: totalHeight
         };
         totalHeight+=row.height;
         allRows[index] = row;
 
-        if (startIndex === -1 && row.offsetTop + row.height > rangeStart)  {
-          startIndex = Math.max(0, index - overscan);
+        if (startIndexRows === -1 && row.offsetTop + row.height > rangeStart)  {
+          startIndexRows = Math.max(0, index - overscanY);
         }
         
         if (index === allRows.length - 1) {
           rangeEnd = totalHeight;
         }
 
-        if (endIndex === -1 && row.offsetTop + row.height >= rangeEnd)  {
-          endIndex = Math.min(itemsCount - 1, index + overscan);
+        if (endIndexRows === -1 && row.offsetTop + row.height >= rangeEnd)  {
+          endIndexRows = Math.min(rowsCount - 1, index + overscanY);
         }
       }
       
-      const virtualItems = allRows.slice(startIndex, endIndex + 1)
+      const virtualRows = allRows.slice(startIndexRows, endIndexRows + 1)
 
-      return {virtualItems, startIndex, endIndex, allItems: allRows, totalHeight};
+      return {virtualRows, startIndexRows, endIndexRows, allRows, totalHeight};
     },[
       scrollTop, 
-      itemsCount, 
-      listHeight, 
-      itemsHeight,
-      overscan, 
-      estimateItemHeight, 
-      measurementCache
+      rowsCount, 
+      gridHeight, 
+      rowHeight,
+      overscanY, 
+      estimateRowHeight, 
     ]);
 
-    const latestData = useLatest({measurementCache, getItemKey, allItems, scrollTop })
+    const {
+      allColumns,
+      endIndexColumns,
+      startIndexColumns,
+      totalWidth,
+      virtualColumns
+    } = useMemo(() => {
+
+      const rangeStart = scrollLeft;
+      let rangeEnd = scrollLeft + gridWidth;
+
+      let totalWidth = 0;
+      let startIndexColumns = -1;
+      let endIndexColumns = -1;
+
+      const allColumns: DynamicSizeGridColumn[] = new Array(columnsCount);
+      for (let index = 0; index < allColumns.length; index++) {
+
+        const key = getColumnKey(index);
+        const column = {
+          key,
+          index: index,
+          width: columnWidth(index),
+          offsetLeft: totalWidth
+        };
+        totalWidth+=column.width;
+        allColumns[index] = column;
+
+        if (startIndexColumns === -1 && column.offsetLeft + column.width > rangeStart)  {
+          startIndexColumns = Math.max(0, index - overscanX);
+        }
+        
+        if (index === allColumns.length - 1) {
+          rangeEnd = totalWidth;
+        }
+
+        if (endIndexColumns === -1 && column.offsetLeft + column.width >= rangeEnd)  {
+          endIndexColumns = Math.min(columnsCount - 1, index + overscanX);
+        }
+      }
+      
+      const virtualColumns = allColumns.slice(startIndexColumns, endIndexColumns + 1)
+
+      return {virtualColumns, startIndexColumns, endIndexColumns, allColumns, totalWidth};
+    },[
+      scrollLeft, 
+      columnsCount, 
+      gridWidth, 
+      columnWidth,
+      overscanX, 
+    ]);
+
+    const latestData = useLatest({measurementCache, getRowKey, allRows, scrollTop: scrollTop })
 
     const measureElementInner = useCallback((element: Element, resizeObserver: ResizeObserver, entry?: ResizeObserverEntry) => {
       
@@ -211,24 +288,24 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
         console.error('dynamic elements must have a valid `data-index` attribute');
       }
 
-      const {getItemKey, measurementCache, allItems, scrollTop} = latestData.current;
+      const {getRowKey, measurementCache, allRows, scrollTop} = latestData.current;
 
       const isResize = !!entry;
-      const key = getItemKey(index);
+      const key = getRowKey(index);
 
       if (!isResize && typeof measurementCache[key] === 'number') {
         return;
       } 
 
-      const height = entry?.borderBoxSize[0]?.blockSize ?? element.getBoundingClientRect().height;
+      const height = entry?.borderBoxSize[0].blockSize ?? element.getBoundingClientRect().height;
 
       if (measurementCache[key] === height) {
         return;
       }
 
-      const item = allItems[index];
-      const delta = height - item.height; 
-      if (delta !== 0 && scrollTop > item.offsetTop) {
+      const row = allRows[index];
+      const delta = height - row.height; 
+      if (delta !== 0 && scrollTop > row.offsetTop) {
         const element = getScrollElement();
         if (element) {
           element.scrollBy(0, delta);
@@ -237,7 +314,7 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
       setMeasurementCache(cache => ({...cache, [key]: height}))
     }, [])
     
-    const itemsResizeObserver = useMemo(() => {
+    const rowsResizeObserver = useMemo(() => {
       const observer = new ResizeObserver((entries) => {
         entries.forEach((entry) => measureElementInner(entry.target, observer, entry))
       })
@@ -245,16 +322,21 @@ export function useFixedSizeList(props: UseFixedSizeListProps) {
     },[latestData])
     
     const measureElement = useCallback((element: Element | null) => {
-      measureElementInner(element, itemsResizeObserver)
-    }, [itemsResizeObserver])
-
+      measureElementInner(element, rowsResizeObserver)
+    }, [rowsResizeObserver])
+    
     return {
       isScrolling,
-      virtualItems,
-      startIndex,
-      endIndex,
-      allItems,
+      virtualRows,
+      virtualColumns,
+      allColumns,
+      allRows,
+      startIndexColumns,
+      startIndexRows,
+      endIndexColumns, 
+      endIndexRows,
+      measureElement,
       totalHeight,
-      measureElement
+      totalWidth
     }
 }

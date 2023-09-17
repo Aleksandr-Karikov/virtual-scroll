@@ -1,35 +1,55 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import cls from './VirtualScroll.module.css'
-import { useFixedSizeList } from './VirtualScroll.hooks';
+import { useDinamicSizeGrid } from './VirtualScroll.hooks';
 import {faker} from '@faker-js/faker';
-const items = Array.from({length: 10_000}, (_, index) => ({
+
+const gridSize = 100;
+
+const items = Array.from({length: gridSize}, (_) => ({
   id: Math.random().toString(36).slice(2),
-  text: faker.lorem.text()
+  columns: Array.from({length: gridSize}, (_) => ({
+    text: faker.word.words(10),
+    id: Math.random().toString(36).slice(2),
+  }))
 }))
 export const VirtualScroll = () => {
-  const [listItems, setListItems] = useState(items);
+  const [grid, setGrid] = useState(items);
   const scrollElementRef = useRef<HTMLDivElement>(null);
 
   const {
-    virtualItems, 
+    virtualRows,
+    virtualColumns,
     isScrolling,
     totalHeight,
-    measureElement
-    } = useFixedSizeList({
-    getScrollElement: useCallback(() => scrollElementRef.current, []),
-    itemsCount: listItems.length,
-    estimateItemHeight: useCallback(() => 40, []),
-    getItemKey: useCallback((index) => listItems[index]!.id, [listItems])
-  })
+    measureElement,
+    totalWidth
+    } = useDinamicSizeGrid({
+      getScrollElement: useCallback(() => scrollElementRef.current, []),
+      rowsCount: gridSize,
+      estimateRowHeight: useCallback(() => 72, [grid]),
+      getRowKey: useCallback((index) => grid[index]!.id, [grid]),
+      getColumnKey: useCallback((index) => index, []),
+      columnsCount: gridSize + 1,
+      columnWidth: useCallback(() => 200, [grid]),
+    })
 
+  const reverse = () => {
+    setGrid((grid) => grid
+        .map(row => ({
+          ...row,
+          columns: row.columns.slice().reverse()
+        }))
+        .reverse()
+      )
+  }
   return (
     <>
-        <button onClick={() => setListItems(items => items.slice().reverse())}>reverse</button>
+        <button onClick={reverse}>reverse</button>
         <div ref={scrollElementRef} className={cls.wrap}>
-          <div className={cls.content} style={{height: `${totalHeight}px`}}>
+          <div className={cls.content} style={{height: `${totalHeight}px`, width: `${totalWidth}px`}}>
           {
-            virtualItems.map(({index, offsetTop, height}) => {
-              const item = listItems[index];
+            virtualRows.map(({index, offsetTop, height}, row) => {
+              const item = grid[index];
               return (
                 <div 
                   key={item.id}
@@ -38,12 +58,23 @@ export const VirtualScroll = () => {
                   style={{
                     padding: '10px',
                     position: 'absolute',
+                    display: 'flex',
                     top:0,
                     transform: `translateY(${offsetTop}px)`
                   }} 
                   
                 >
-                  {index} - {item.text}
+                  {
+                    virtualColumns.map(({offsetLeft}, index) => {
+                      const {id, text} = item.columns[index]
+                      console.log(index, offsetLeft);
+                      return (
+                        <div key={id} style={{width: 200, marginLeft: index === 0 ? `${offsetLeft}px` : 0}}>
+                          {text}
+                        </div>
+                      )
+                    })
+                  }
                 </div>
               )
             })
